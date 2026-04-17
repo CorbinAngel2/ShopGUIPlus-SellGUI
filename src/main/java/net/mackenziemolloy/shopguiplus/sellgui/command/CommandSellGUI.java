@@ -42,6 +42,7 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.block.ShulkerBox;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
@@ -53,6 +54,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.BlockStateMeta;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.Plugin;
@@ -350,6 +352,11 @@ public final class CommandSellGUI implements TabExecutor {
         }
     }
 
+    private boolean isShulkerBox(Material material) {
+        String name = material.name();
+        return name.equals("SHULKER_BOX") || name.endsWith("_SHULKER_BOX");
+    }
+
     private void onGuiClose(Player player, InventoryCloseEvent event, Set<Integer> ignoredSlotSet) {
         int minorVersion = VersionUtility.getMinorVersion();
         CommentedConfiguration configuration = this.plugin.getConfiguration();
@@ -375,6 +382,84 @@ public final class CommandSellGUI implements TabExecutor {
             }
 
             itemsPlacedInGui = true;
+
+            if (isShulkerBox(i.getType())) {
+                ItemMeta shulkerMeta = i.getItemMeta();
+                if (shulkerMeta instanceof BlockStateMeta blockStateMeta) {
+                    org.bukkit.block.BlockState blockState = blockStateMeta.getBlockState();
+                    if (blockState instanceof ShulkerBox shulkerBox) {
+                        Inventory shulkerInventory = shulkerBox.getInventory();
+                        List<ItemStack> sellableContents = new ArrayList<>();
+                        List<ItemStack> nonSellableContents = new ArrayList<>();
+
+                        for (ItemStack content : shulkerInventory.getContents()) {
+                            if (content == null || content.getType() == Material.AIR) continue;
+                            if (ShopGuiPlusApi.getItemStackPriceSell(player, content) > 0) {
+                                sellableContents.add(content);
+                            } else {
+                                nonSellableContents.add(content);
+                            }
+                        }
+
+                        if (!sellableContents.isEmpty()) {
+                            double shulkerSellPrice = ShopGuiPlusApi.getItemStackPriceSell(player, i);
+                            if (shulkerSellPrice > 0) {
+                                itemAmount += i.getAmount();
+                                @Deprecated
+                                short shulkerDamage = i.getDurability();
+                                EconomyType shulkerEconomyType = ShopHandler.getEconomyType(i);
+                                ItemStack singleShulker = new ItemStack(i);
+                                singleShulker.setAmount(1);
+                                itemStackSellPriceCache.putIfAbsent(singleShulker, new ShopItemPriceValue(shulkerEconomyType, shulkerSellPrice / i.getAmount()));
+                                totalPrice += shulkerSellPrice;
+                                Map<Short, Integer> shulkerSold = soldMap2.getOrDefault(singleShulker, new HashMap<>());
+                                shulkerSold.put(shulkerDamage, shulkerSold.getOrDefault(shulkerDamage, 0) + i.getAmount());
+                                soldMap2.put(singleShulker, shulkerSold);
+                                moneyMap.put(shulkerEconomyType, moneyMap.getOrDefault(shulkerEconomyType, 0.0) + shulkerSellPrice);
+                            }
+
+                            for (ItemStack content : sellableContents) {
+                                ItemStack singleContent = new ItemStack(content);
+                                singleContent.setAmount(1);
+                                double contentSellPrice = itemStackSellPriceCache.containsKey(singleContent)
+                                        ? itemStackSellPriceCache.get(singleContent).getSellPrice() * content.getAmount()
+                                        : ShopGuiPlusApi.getItemStackPriceSell(player, content);
+                                itemAmount += content.getAmount();
+                                @Deprecated
+                                short contentDamage = content.getDurability();
+                                EconomyType contentEconomyType = ShopHandler.getEconomyType(content);
+                                itemStackSellPriceCache.putIfAbsent(singleContent, new ShopItemPriceValue(contentEconomyType, contentSellPrice / content.getAmount()));
+                                totalPrice += contentSellPrice;
+                                Map<Short, Integer> contentSold = soldMap2.getOrDefault(singleContent, new HashMap<>());
+                                contentSold.put(contentDamage, contentSold.getOrDefault(contentDamage, 0) + content.getAmount());
+                                soldMap2.put(singleContent, contentSold);
+                                moneyMap.put(contentEconomyType, moneyMap.getOrDefault(contentEconomyType, 0.0) + contentSellPrice);
+                            }
+
+                            if (!nonSellableContents.isEmpty()) {
+                                excessItems = true;
+                                Location location = player.getLocation().add(0.0D, 0.5D, 0.0D);
+                                for (ItemStack nonSellable : nonSellableContents) {
+                                    Map<Integer, ItemStack> fallenItems = event.getPlayer().getInventory().addItem(nonSellable);
+                                    scheduler.runAtLocation(location, task -> {
+                                        World world = player.getWorld();
+                                        fallenItems.values().forEach(item -> world.dropItemNaturally(location, item));
+                                    });
+                                }
+                            }
+                        } else {
+                            excessItems = true;
+                            Location location = player.getLocation().add(0.0D, 0.5D, 0.0D);
+                            Map<Integer, ItemStack> fallenItems = event.getPlayer().getInventory().addItem(i);
+                            scheduler.runAtLocation(location, task -> {
+                                World world = player.getWorld();
+                                fallenItems.values().forEach(item -> world.dropItemNaturally(location, item));
+                            });
+                        }
+                        continue;
+                    }
+                }
+            }
 
             ItemStack singleItem = new ItemStack(i);
             singleItem.setAmount(1);
