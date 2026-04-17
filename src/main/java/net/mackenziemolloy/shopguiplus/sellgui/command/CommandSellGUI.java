@@ -354,6 +354,7 @@ public final class CommandSellGUI implements TabExecutor {
         int minorVersion = VersionUtility.getMinorVersion();
         CommentedConfiguration configuration = this.plugin.getConfiguration();
 
+        // ItemStack is a stack size of 0, Integer is Price
         Map<ItemStack, ShopItemPriceValue> itemStackSellPriceCache = new HashMap<>();
 
         Map<ItemStack, Map<Short, Integer>> soldMap2 = new HashMap<>();
@@ -368,69 +369,17 @@ public final class CommandSellGUI implements TabExecutor {
         for (int a = 0; a < inventory.getSize(); a++) {
             ItemStack i = inventory.getItem(a);
 
+            // Quick check for invalid items: null or ignored item
             if (i == null || ignoredSlotSet.contains(a)) {
                 continue;
             }
 
             itemsPlacedInGui = true;
 
-            boolean hasUnsellableContents = false;
-            if (i.hasItemMeta() && i.getItemMeta() instanceof org.bukkit.inventory.meta.BlockStateMeta blockStateMeta) {
-                if (blockStateMeta.getBlockState() instanceof org.bukkit.block.ShulkerBox shulkerBox) {
-                    Inventory shulkerInventory = shulkerBox.getInventory();
-                    boolean shulkerModified = false;
-
-                    for (int s = 0; s < shulkerInventory.getSize(); s++) {
-                        ItemStack shulkerItem = shulkerInventory.getItem(s);
-                        if (shulkerItem == null || shulkerItem.getType() == Material.AIR) continue;
-
-                        ItemStack singleShulkerItem = new ItemStack(shulkerItem);
-                        singleShulkerItem.setAmount(1);
-
-                        if (itemStackSellPriceCache.getOrDefault(singleShulkerItem, new ShopItemPriceValue(null, 0.0)).getSellPrice() > 0 || ShopGuiPlusApi.getItemStackPriceSell(player, shulkerItem) > 0) {
-                            itemAmount += shulkerItem.getAmount();
-
-                            @Deprecated
-                            short materialDamage = shulkerItem.getDurability();
-                            int amount = shulkerItem.getAmount();
-
-                            double itemSellPrice = itemStackSellPriceCache.containsKey(singleShulkerItem) ? itemStackSellPriceCache.get(singleShulkerItem).getSellPrice() * amount : ShopGuiPlusApi.getItemStackPriceSell(player, shulkerItem);
-
-                            totalPrice += itemSellPrice;
-
-                            EconomyType itemEconomyType = ShopHandler.getEconomyType(shulkerItem);
-
-                            itemStackSellPriceCache.putIfAbsent(singleShulkerItem, new ShopItemPriceValue(itemEconomyType, itemSellPrice / amount));
-
-                            Map<Short, Integer> totalSold = soldMap2.getOrDefault(singleShulkerItem, new HashMap<>());
-                            int totalSoldCount = totalSold.getOrDefault(materialDamage, 0);
-                            int amountSold = (totalSoldCount + amount);
-
-                            totalSold.put(materialDamage, amountSold);
-                            soldMap2.put(singleShulkerItem, totalSold);
-
-                            double totalSold2 = moneyMap.getOrDefault(itemEconomyType, 0.0);
-                            double amountSold2 = (totalSold2 + itemSellPrice);
-                            moneyMap.put(itemEconomyType, amountSold2);
-
-                            shulkerInventory.setItem(s, null);
-                            shulkerModified = true;
-                        } else {
-                            hasUnsellableContents = true;
-                        }
-                    }
-
-                    if (shulkerModified) {
-                        blockStateMeta.setBlockState(shulkerBox);
-                        i.setItemMeta(blockStateMeta);
-                    }
-                }
-            }
-
             ItemStack singleItem = new ItemStack(i);
             singleItem.setAmount(1);
 
-            if (!hasUnsellableContents && (itemStackSellPriceCache.getOrDefault(singleItem, new ShopItemPriceValue(null, 0.0)).getSellPrice() > 0 || ShopGuiPlusApi.getItemStackPriceSell(player, i) > 0)) {
+            if (itemStackSellPriceCache.getOrDefault(singleItem, new ShopItemPriceValue(null, 0.0)).getSellPrice() > 0 || ShopGuiPlusApi.getItemStackPriceSell(player, i) > 0) {
                 itemAmount += i.getAmount();
 
                 @Deprecated
@@ -574,6 +523,7 @@ public final class CommandSellGUI implements TabExecutor {
                     .replace("{amount}", itemAmountFormatted));
         }
 
+        /* Subject to deprecation */
         if (plugin.fileLogger != null) {
             plugin.fileLogger.info(player.getName() + " (" + player.getUniqueId() + ") sold: {" + HexColorUtility.purgeAllColor(String.join(", ", receiptList)) + "}");
         }
