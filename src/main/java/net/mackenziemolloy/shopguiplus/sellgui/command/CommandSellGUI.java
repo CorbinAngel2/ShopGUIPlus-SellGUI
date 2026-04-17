@@ -401,53 +401,53 @@ public final class CommandSellGUI implements TabExecutor {
                             }
                         }
 
-                        if (!sellableContents.isEmpty()) {
-                            double shulkerSellPrice = ShopGuiPlusApi.getItemStackPriceSell(player, i);
-                            if (shulkerSellPrice > 0) {
-                                itemAmount += i.getAmount();
-                                @Deprecated
-                                short shulkerDamage = i.getDurability();
-                                EconomyType shulkerEconomyType = ShopHandler.getEconomyType(i);
-                                ItemStack singleShulker = new ItemStack(i);
-                                singleShulker.setAmount(1);
-                                itemStackSellPriceCache.putIfAbsent(singleShulker, new ShopItemPriceValue(shulkerEconomyType, shulkerSellPrice / i.getAmount()));
-                                totalPrice += shulkerSellPrice;
-                                Map<Short, Integer> shulkerSold = soldMap2.getOrDefault(singleShulker, new HashMap<>());
-                                shulkerSold.put(shulkerDamage, shulkerSold.getOrDefault(shulkerDamage, 0) + i.getAmount());
-                                soldMap2.put(singleShulker, shulkerSold);
-                                moneyMap.put(shulkerEconomyType, moneyMap.getOrDefault(shulkerEconomyType, 0.0) + shulkerSellPrice);
-                            }
+                        double shulkerSellPrice = ShopGuiPlusApi.getItemStackPriceSell(player, i);
+                        boolean shulkerWasSold = false;
+                        if (shulkerSellPrice > 0) {
+                            itemAmount += i.getAmount();
+                            @Deprecated
+                            short shulkerDamage = i.getDurability();
+                            EconomyType shulkerEconomyType = ShopHandler.getEconomyType(i);
+                            ItemStack singleShulker = new ItemStack(i);
+                            singleShulker.setAmount(1);
+                            itemStackSellPriceCache.putIfAbsent(singleShulker, new ShopItemPriceValue(shulkerEconomyType, shulkerSellPrice / i.getAmount()));
+                            totalPrice += shulkerSellPrice;
+                            Map<Short, Integer> shulkerSold = soldMap2.getOrDefault(singleShulker, new HashMap<>());
+                            shulkerSold.put(shulkerDamage, shulkerSold.getOrDefault(shulkerDamage, 0) + i.getAmount());
+                            soldMap2.put(singleShulker, shulkerSold);
+                            moneyMap.put(shulkerEconomyType, moneyMap.getOrDefault(shulkerEconomyType, 0.0) + shulkerSellPrice);
+                            shulkerWasSold = true;
+                        }
 
-                            for (ItemStack content : sellableContents) {
-                                ItemStack singleContent = new ItemStack(content);
-                                singleContent.setAmount(1);
-                                double contentSellPrice = itemStackSellPriceCache.containsKey(singleContent)
-                                        ? itemStackSellPriceCache.get(singleContent).getSellPrice() * content.getAmount()
-                                        : ShopGuiPlusApi.getItemStackPriceSell(player, content);
-                                itemAmount += content.getAmount();
-                                @Deprecated
-                                short contentDamage = content.getDurability();
-                                EconomyType contentEconomyType = ShopHandler.getEconomyType(content);
-                                itemStackSellPriceCache.putIfAbsent(singleContent, new ShopItemPriceValue(contentEconomyType, contentSellPrice / content.getAmount()));
-                                totalPrice += contentSellPrice;
-                                Map<Short, Integer> contentSold = soldMap2.getOrDefault(singleContent, new HashMap<>());
-                                contentSold.put(contentDamage, contentSold.getOrDefault(contentDamage, 0) + content.getAmount());
-                                soldMap2.put(singleContent, contentSold);
-                                moneyMap.put(contentEconomyType, moneyMap.getOrDefault(contentEconomyType, 0.0) + contentSellPrice);
-                            }
+                        for (ItemStack content : sellableContents) {
+                            ItemStack singleContent = new ItemStack(content);
+                            singleContent.setAmount(1);
+                            double contentSellPrice = itemStackSellPriceCache.containsKey(singleContent)
+                                    ? itemStackSellPriceCache.get(singleContent).getSellPrice() * content.getAmount()
+                                    : ShopGuiPlusApi.getItemStackPriceSell(player, content);
+                            itemAmount += content.getAmount();
+                            @Deprecated
+                            short contentDamage = content.getDurability();
+                            EconomyType contentEconomyType = ShopHandler.getEconomyType(content);
+                            itemStackSellPriceCache.putIfAbsent(singleContent, new ShopItemPriceValue(contentEconomyType, contentSellPrice / content.getAmount()));
+                            totalPrice += contentSellPrice;
+                            Map<Short, Integer> contentSold = soldMap2.getOrDefault(singleContent, new HashMap<>());
+                            contentSold.put(contentDamage, contentSold.getOrDefault(contentDamage, 0) + content.getAmount());
+                            soldMap2.put(singleContent, contentSold);
+                            moneyMap.put(contentEconomyType, moneyMap.getOrDefault(contentEconomyType, 0.0) + contentSellPrice);
+                        }
 
-                            if (!nonSellableContents.isEmpty()) {
-                                excessItems = true;
-                                Location location = player.getLocation().add(0.0D, 0.5D, 0.0D);
-                                for (ItemStack nonSellable : nonSellableContents) {
-                                    Map<Integer, ItemStack> fallenItems = event.getPlayer().getInventory().addItem(nonSellable);
-                                    scheduler.runAtLocation(location, task -> {
-                                        World world = player.getWorld();
-                                        fallenItems.values().forEach(item -> world.dropItemNaturally(location, item));
-                                    });
-                                }
+                        if (!nonSellableContents.isEmpty() && shulkerWasSold) {
+                            excessItems = true;
+                            Location location = player.getLocation().add(0.0D, 0.5D, 0.0D);
+                            for (ItemStack nonSellable : nonSellableContents) {
+                                Map<Integer, ItemStack> fallenItems = event.getPlayer().getInventory().addItem(nonSellable);
+                                scheduler.runAtLocation(location, task -> {
+                                    World world = player.getWorld();
+                                    fallenItems.values().forEach(item -> world.dropItemNaturally(location, item));
+                                });
                             }
-                        } else {
+                        } else if (!shulkerWasSold && sellableContents.isEmpty()) {
                             excessItems = true;
                             Location location = player.getLocation().add(0.0D, 0.5D, 0.0D);
                             Map<Integer, ItemStack> fallenItems = event.getPlayer().getInventory().addItem(i);
